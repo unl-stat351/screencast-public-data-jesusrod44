@@ -6,16 +6,34 @@ output: html
 
 [Link to dataset]()
 
+Checking the robots.txt
+
+```{r}
+library(polite)
+bow("https://bulbapedia.bulbagarden.net/wiki/Main_Page")
+```
+
+
 Things you plan to investigate using this dataset:
 
-- Thing 1
-- Thing 2
-- Thing 3
+- Have a dataframe that contains the all pokemon names, number, and type
+- For each pokemon also list their ability(ies), height, weight, and other information I find interesting
+- Maybe have a separate dataset for pokemon with more than one form
 
 Stat 351 topics you plan to cover during the analysis:
 
 1. Topic 1
+
+-   Reading HTML files
+
 2. Topic 2
+
+-   Filtering Data from HTML
+
 3. Topic 3
+
+-   Scraping static (maybe even dynamic) webpages
+
 4. Topic 4
 
+-   Scraping HTML using custom functions
