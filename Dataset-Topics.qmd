@@ -10,30 +10,33 @@ Checking the robots.txt
 
 ```{r}
 library(polite)
-bow("https://bulbapedia.bulbagarden.net/wiki/Main_Page")
+bow('https://clinicaltrials.gov/api/v2')
 ```
 
+It says it is not scrapable, however the API is free and does not require authentication. 
+
+Will this be a problem? 
 
 Things you plan to investigate using this dataset:
 
-- Have a dataframe that contains the all pokemon names, number, and type
-- For each pokemon also list their ability(ies), height, weight, and other information I find interesting
-- Maybe have a separate dataset for pokemon with more than one form
+- Extract the cohorts and their sizes
+- Extract the results and measurements
+- 
 
 Stat 351 topics you plan to cover during the analysis:
 
 1. Topic 1
 
--   Reading HTML files
+-   Parsing JSON 
 
 2. Topic 2
 
--   Filtering Data from HTML
+-   Scraping APIs
 
 3. Topic 3
 
--   Scraping static (maybe even dynamic) webpages
+-   Functional Programming
 
 4. Topic 4
 
--   Scraping HTML using custom functions
+-   JSON list to Tabular data

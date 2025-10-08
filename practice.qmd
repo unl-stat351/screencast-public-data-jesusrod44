@@ -1,0 +1,38 @@
+---
+title: "Practice"
+format: html
+---
+
+```{r, setup}
+
+library(rvest)
+library(httr2)
+library(jsonlite)
+library(tidyverse)
+
+```
+
+
+Just to see what I am working with
+
+```{r}
+library(polite)
+bow('https://clinicaltrials.gov/api/v2')
+```
+
+```{r}
+request <- request(
+  "https://clinicaltrials.gov/api/v2/studies?query.cond=cluster+headache&aggFilters=results%3Awith%2Cstatus%3Acom"
+) %>% 
+  req_perform()
+```
+
+```{r, eval = F}
+resp_raw(request)
+```
+
+```{r}
+json_response <- resp_body_json(request)
+```
+
+
