@@ -4,35 +4,90 @@ format: html
 ---
 
 ```{r, setup}
-
 library(rvest)
 library(httr2)
 library(jsonlite)
 library(tidyverse)
-
+library(purrr)
+library(xml2)
+library(knitr)
 ```
 
-
-Just to see what I am working with
-
-```{r}
-library(polite)
-bow('https://clinicaltrials.gov/api/v2')
-```
+# Acquiring the Data
 
 ```{r}
-request <- request(
+if (file.exists("json_response.json")) {
+  
+  json_response <- read_json("json_response.json")
+  
+} else { 
+  uastring <- 
+    "R/python data science demos, jrodriguez44@huskers.unl.edu"
+  
+  request <- request(
   "https://clinicaltrials.gov/api/v2/studies?query.cond=cluster+headache&aggFilters=results%3Awith%2Cstatus%3Acom"
 ) %>% 
   req_perform()
+  
+  json_response <- resp_body_json(request)
+  
+  # saving json_response if it didn't exist in the first place
+  jsonlite::write_json(json_response, "json_response.json")
+}
 ```
 
-```{r, eval = F}
-resp_raw(request)
+Protocol Section
+
+```{r}
+json_response[['studies']][[1]][['protocolSection']]$identificationModule 
+json_response[['studies']][[1]][['protocolSection']]$statusModule
+json_response[['studies']][[1]][['protocolSection']]$sponsorCollaboratorsModule
+json_response[['studies']][[1]][['protocolSection']]$oversightModule
+json_response[['studies']][[1]][['protocolSection']]$descriptionModule
+json_response[['studies']][[1]][['protocolSection']]$conditionsModule
+json_response[['studies']][[1]][['protocolSection']]$designModule
+json_response[['studies']][[1]][['protocolSection']]$armsInterventionsModule
+json_response[['studies']][[1]][['protocolSection']]$outcomesModule
+json_response[['studies']][[1]][['protocolSection']]$eligibilityModule
+json_response[['studies']][[1]][['protocolSection']]$contactsLocationsModule
+json_response[['studies']][[1]][['protocolSection']]$referencesModule
+json_response[['studies']][[1]][['protocolSection']]$ipdSharingStatementModule
+```
+Results Section 
+
+```{r}
+json_response[["studies"]][[1]][["resultsSection"]]$participantFlowModule
+json_response[["studies"]][[1]][["resultsSection"]]$baselineCharacteristicsModule
+json_response[["studies"]][[1]][["resultsSection"]]$outcomeMeasuresModule
+json_response[["studies"]][[1]][["resultsSection"]]$adverseEventsModule
+json_response[["studies"]][[1]][["resultsSection"]]$moreInfoModule
+```
+
+
+
+```{r}
+study_information <- map_dfr(json_response[['studies']], function(study) {
+  info <- study$protocolSection$identificationModule
+  tibble(
+    nct_id = info$nctId,
+    org_study_id = info$orgStudyIdInfo$id,
+    organization = info$organization$fullName,
+    org_class = info$organization$class,
+    brief_title = info$briefTitle,
+    official_title = info$officialTitle
+  )
+}) 
 ```
 
 ```{r}
-json_response <- resp_body_json(request)
-```
+str(study_information)
 
+
+study_information <- 
+  study_information %>% 
+  map_dfr(~.x %>% 
+            unlist(recursive = T))
+
+str(study_information)
+```
 

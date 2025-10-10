@@ -21,7 +21,7 @@ Things you plan to investigate using this dataset:
 
 - Extract the cohorts and their sizes
 - Extract the results and measurements
-- 
+- Make some visualizations (charts, graphs, perhaps more...)
 
 Stat 351 topics you plan to cover during the analysis:
 

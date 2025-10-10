@@ -1,6 +1,47 @@
 ---
-author: Your Name
+author: Jesus Rodriguez
 title: Screencast Pseudocode
 output: html
 ---
+
+I have gotten my API response from clinicaltrials.gov, in it the studies seem to follow a similar structure:
+
+-   studies
+    -   [[1]]
+        -   protocolSection
+            -   ...
+        -   resultsSection
+            -   ...
+        -   *documentSection* *(some are missing this section)*
+            -   ...
+        -   derivedSection
+            -   ...
+        -   hasResults
+            -   TRUE *(In my requested, I included only studies that have a status of completed, so they should all have results I can look at)*
+        
+What I'd really like to extract are the study information, the cohorts, the treatment, and the results.
+
+After looking around in the json file, I found that most of the things I need will be located in the `protocolSection` and `resultsSection`. 
+
+The study information I'd like are things like description, start date and end date, design of the experiment, organization that sponsored the study, and more information that I see fit as I explore the json file.
+
+I'd like to make graphs and charts for the results. After looking around, I see that most studies have PRIMARY and SECONDARY results, and some have multiple SECONDARY results. Not only this, but all measurements of the results can be different. Some of the measurements I've seen have been MEAN, NUMBER, LEAST_SQUARES_MEAN, Standard Error. Also, some studies have more than 10+ SECONDARY results, so maybe my goal for now will to just plot the PRIMARY results.
+
+# Extracting Study Information
+
+There is very great information in the `protocolSection$identificationModule` section such as the ID of the study, the title, and organization. I plan to extract this information by writing a function that will look at the `protocolSection$identificationModule` for each study ([[1]], [[2]], [[3]], ...) and save subsection (`nctID`, `orgStudyInfo`,...) as a column in a tibble. Then I'll use `purrr:map_dfr()` to apply this function to each `json_response$studies`, hopefully I can get a nice unlisted table from this. I'll continue to add more study information I find as I explore the json file. 
+
+# Extracting Results Information
+
+Everything I need seems to be in the `resultsSection$outcomeMeasuresModule$outcomeMeasures`. The information here contains the type of result (PRIMARY / SECONDARY), title, description, paramterer type, unit of measurement, and time frame. 
+
+However the actual values I want to make charts out of are in the `resultsSection$outcomeMeasuresModule$outcomeMeasures$classes` section. Here, it contains the values that each group received. 
+
+I hope I can use the same process as before (build a function, use `map_dfr()` ) to get a results table, and then get a values table, and then connect the two. 
+
+Charts and graphs will be created using `ggplot()`. 
+
+
+
+
 
