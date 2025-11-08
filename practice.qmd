@@ -64,6 +64,7 @@ json_response[["studies"]][[1]][["resultsSection"]]$moreInfoModule
 ```
 
 
+# Study Information
 
 ```{r}
 study_information <- map_dfr(json_response[['studies']], function(study) {
@@ -91,3 +92,283 @@ study_information <-
 str(study_information)
 ```
 
+# Results
+
+```{r}
+outcome_measures_list <- 
+  json_response$studies[[1]]$resultsSection$outcomeMeasuresModule$outcomeMeasures
+
+outcome_list <- outcome_measures_list
+```
+
+```{r}
+outcome_df <- map_dfr(outcome_list, function(x) {
+  tibble(
+    type = pluck(x, "type", .default = NA),
+    title = pluck(x, "title", .default = NA),
+    description = pluck(x, "description", .default = NA),
+    population_description = pluck(x, "populationDescription", .default = NA),
+    reporting_status = pluck(x, "reportingStatus", .default = NA),
+    param_type = pluck(x, "paramType", .default = NA),
+    dispersion_type = pluck(x, "dispersionType", .default = NA),
+    unit_of_measure = pluck(x, "unitOfMeasure", .default = NA),
+    time_frame = pluck(x, "timeFrame", .default = NA),
+    
+    # Flatten nested parts
+    group = if (!is.null(x$groups)) paste(unlist(x$groups), collapse = "; ") else NA,
+    class = if (!is.null(x$classes)) paste(unlist(x$classes), collapse = "; ") else NA
+  )
+})
+```
+
+```{r}
+outcome_df_clean <- outcome_df %>%
+  mutate(across(everything(), ~ map_chr(., ~ if (is.null(.x)) NA else .x)))
+```
+
+## trying to make a dataframe from the listed groups and classes
+
+```{r}
+first_study_groups <- 
+outcome_df_clean %>% 
+  separate_longer_delim(
+    cols = group,
+    delim = ";"
+  ) %>% 
+  mutate(
+    group = str_trim(group)
+  ) %>% 
+  mutate(
+    group_number = ceiling(row_number()/3)
+  ) %>% 
+  group_by(group_number) %>% 
+  summarise(
+    group_id = first(group),
+    group_title = nth(group, 2),
+    group_description = nth(group, 3)
+  ) %>% 
+  select(-1) %>% 
+  distinct()
+```
+
+```{r}
+first_study_results <-
+  outcome_df_clean %>% 
+  separate_longer_delim(
+    cols = class,
+    delim = ";"
+  ) %>%
+  mutate(
+    class = str_trim(class)
+  ) %>% 
+  mutate(
+    class_title = 
+      if_else(
+        str_detect(class, "[^A-Z0-9.]"),
+        class,
+        NA
+      )
+    ) %>% 
+  group_by(title) %>% 
+  fill(class_title, .direction = "down") %>% 
+  mutate(
+    class_title = 
+      if_else(
+        is.na(class_title),
+        title,
+        class_title
+      )
+  ) %>% 
+  filter(
+    !(class == class_title)
+  ) %>% 
+  mutate(
+    group_number = 
+      if_else(
+        is.na(dispersion_type),
+        ceiling(row_number()/2),
+        ceiling(row_number()/3)
+      )
+  ) %>% 
+  ungroup() %>% 
+  group_by(type, title, group_number, class_title) %>% 
+  summarise(
+    group_id = first(class),
+    value = nth(class, 2),
+    spread = 
+      ifelse(
+        is.na(nth(class, 3)),
+        NA,
+        nth(class,3)
+        )
+  ) %>% 
+  ungroup() %>% 
+  select(-group_number)
+```
+
+## Making one big dataframe for the results!
+
+```{r}
+first_study_groups_and_results <-
+  first_study_results %>% 
+  left_join(first_study_groups,
+            by = "group_id")
+```
+
+```{r}
+first_study_full_results <-
+  outcome_df_clean %>% 
+  select(-group, -class) %>% 
+  right_join(
+    first_study_groups_and_results,
+    by = "title"
+  ) %>% 
+  rename(type = type.x) %>% 
+  select(-type.y)
+```
+
+## Formatting Columns correctly
+
+```{r}
+first_study_full_results <- 
+  first_study_full_results %>% 
+  mutate(
+    across(c(param_type, dispersion_type, class_title, group_id), as.factor), 
+    across(c(value, spread), as.numeric)
+  )
+```
+
+
+## Trying to make some visualizations
+
+```{r}
+first_study_full_results[1:4,] %>% 
+  ggplot(aes(x = group_id, y = value, fill = group_title)) + 
+  geom_bar(stat = "identity") + 
+  facet_wrap(~class_title)
+
+first_study_full_results[5:8,] %>% 
+  ggplot(aes(x = group_id, y = value, fill = group_title)) + 
+  geom_bar(stat = "identity") + 
+  facet_wrap(~class_title)
+
+first_study_full_results[9:32,] %>% 
+  ggplot(aes(x = group_id, y = value, fill = group_title)) + 
+  geom_bar(stat = "identity") + 
+  facet_wrap(~class_title)
+
+first_study_full_results[33:34,] %>% 
+  ggplot(aes(x = group_id, y = value, fill = group_title)) + 
+  geom_bar(stat = "identity") + 
+  facet_wrap(~class_title)
+
+first_study_full_results[35:38,] %>% 
+  ggplot(aes(x = group_id, y = value, fill = group_title)) + 
+  geom_bar(stat = "identity") + 
+  facet_wrap(~class_title)
+  
+```
+
+# FULL Results
+
+# Results 
+
+Safely extract all outcomes measures from all studies
+
+```{r}
+# Extract outcome measures list for each study
+all_outcome_measures <- map(
+  json_response$studies,
+  ~ pluck(.x, "resultsSection", "outcomeMeasuresModule", "outcomeMeasures", .default = NULL)
+)
+
+# Keep only non-null studies
+all_outcome_measures <- compact(all_outcome_measures)
+
+```
+
+Convert all outcome measure lists to dataframes and tag each study
+
+```{r}
+# Apply your original map_dfr logic to each study
+outcome_df_all <- imap_dfr(
+  all_outcome_measures,
+  function(outcome_list, study_index) {
+    map_dfr(outcome_list, function(x) {
+      tibble(
+        study_id = study_index,
+        type = pluck(x, "type", .default = NA),
+        title = pluck(x, "title", .default = NA),
+        description = pluck(x, "description", .default = NA),
+        population_description = pluck(x, "populationDescription", .default = NA),
+        reporting_status = pluck(x, "reportingStatus", .default = NA),
+        param_type = pluck(x, "paramType", .default = NA),
+        dispersion_type = pluck(x, "dispersionType", .default = NA),
+        unit_of_measure = pluck(x, "unitOfMeasure", .default = NA),
+        time_frame = pluck(x, "timeFrame", .default = NA),
+        group = if (!is.null(x$groups)) paste(unlist(x$groups), collapse = "; ") else NA,
+        class = if (!is.null(x$classes)) paste(unlist(x$classes), collapse = "; ") else NA
+      )
+    })
+  }
+)
+
+```
+
+Clean and flatten nulls
+
+```{r}
+outcome_df_clean <- outcome_df_all %>%
+  mutate(across(everything(), ~ ifelse(is.null(.x) | .x == "", NA, .x)))
+```
+
+Apply your groups and classes parsing logic to all studies at once
+
+```{r}
+study_groups <- outcome_df_clean %>% 
+  separate_longer_delim(cols = group, delim = ";") %>%
+  mutate(group = str_trim(group)) %>%
+  group_by(study_id) %>%
+  mutate(group_number = ceiling(row_number() / 3)) %>%
+  group_by(study_id, group_number) %>%
+  summarise(
+    group_id = first(group),
+    group_title = nth(group, 2),
+    group_description = nth(group, 3),
+    .groups = "drop"
+  ) %>%
+  distinct()
+
+```
+
+```{r}
+study_results <- outcome_df_clean %>%
+  select(-group) %>% 
+  separate_longer_delim(cols = class, delim = ";") %>%
+  mutate(class = str_trim(class)) %>%
+  group_by(study_id) %>%
+  unnest(everything()) %>% 
+  mutate(
+    class_title = if_else(str_detect(class, "[^A-Z0-9.]"), class, NA)
+  ) %>%
+  group_by(study_id, title) %>%
+  fill(class_title, .direction = "down") %>%
+  mutate(class_title = if_else(is.na(class_title), title, class_title)) %>%
+  filter(class != class_title) %>%
+  mutate(
+    group_number = if_else(
+      is.na(dispersion_type),
+      ceiling(row_number() / 2),
+      ceiling(row_number() / 3)
+    )
+  ) %>%
+  ungroup() %>%
+  group_by(study_id, type, title, group_number, class_title) %>%
+  summarise(
+    group_id = first(class),
+    value = nth(class, 2),
+    spread = ifelse(is.na(nth(class, 3)), NA, nth(class, 3)),
+    .groups = "drop"
+  )
+
+```

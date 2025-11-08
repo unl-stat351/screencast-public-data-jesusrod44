@@ -40,3 +40,7 @@ Stat 351 topics you plan to cover during the analysis:
 4. Topic 4
 
 -   JSON list to Tabular data
+
+5. Topic 5 
+
+-   Shiny App
