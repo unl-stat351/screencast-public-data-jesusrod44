@@ -410,10 +410,12 @@ test %>%
 ```{r}
 dir.create("screencast-app")
 dir.create("screencast-app/data")
-write.csv(first_study_full_results,
+write.csv(test,
           "screencast-app/data/first_study_outcome_measures.csv", 
           row.names = F)
 ```
+
+
 
 <!-- # FULL Results -->
 
