@@ -5,7 +5,7 @@ library(tidyverse)
 
 # Load data ---
 first_study_outcome_measures <- 
-  read_csv("data/first_study_outcome_measures.csv")
+  read_rds("data/first_study_outcome_measures.rds")
 
 # User interface ---
 ui <- 
@@ -17,21 +17,12 @@ ui <-
         selectInput(
           "event",
           label = "Choose an event to display:",
-          choices = c(
-            "Number of attacks treated",
-            "Disability score",
-            "Mobility",
-            "Selfcare",
-            "Activity",
-            "Pain",
-            "Anxiety",
-            "VAS scale",
-            "Patients Who Used Any Type of Rescue Medication"
-          )
+          choices = 
+            unique(first_study_outcome_measures$event)
         )
       ),
     # Output: Graphs ---
-    plotOutput(outputId = "plot", height = "600px")
+    plotOutput(outputId = "plot")
   )
 
 # Server logic ---
@@ -79,8 +70,8 @@ server <- function(input, output) {
         theme_bw()
       
     } else if (input$event == "VAS scale") {
-      ggplot(data, aes(x = group_title, y = value, fill = group_title)) +
-        geom_bar(stat = "identity") +
+      ggplot(data, aes(x = time, y = value, fill = group_title)) +
+        geom_bar(stat = "identity", position = position_dodge()) +
         scale_fill_brewer("Group", palette = "Set1") +
         labs(
           x = "Group",

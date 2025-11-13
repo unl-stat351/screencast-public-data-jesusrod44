@@ -342,6 +342,30 @@ test %>%
   theme_bw()
 
 ```
+```{r}
+#| fig-subcap: ["EQ-5D-3L descriptive system comprises 5 dimensions: mobility, self-care, activity, pain and anxiety. Each dimension has 3 levels: 1 = no problems, 2 = moderate problems, 3=extreme problems. Subjects indicate health state by ticking choosing appropriate statement in each dimension. Patients completed the EQ-5D-3L at baseline (the start of the randomized period and at 2 weeks)."]
+#| 
+
+
+test %>% 
+  # filter(event != "Number of attacks treated" & event != "VAS scale" & event != "Patients Who Used Any Type of Rescue Medication" & event != "Disability score")  %>% 
+  filter(title == "Mean Change of Questionnaire EQ-5D-3L (Euroqol- 5D-3L) From Baseline to After 2 Weeks Treatment") %>% 
+  ggplot(aes(x = time, y = value, group = group_title, color = group_title)) +
+  scale_color_brewer("Group", palette = "Set1") +
+  geom_line(linewidth = 1, alpha = 0.7) +
+  geom_point(size = 3, alpha = 0.7) +
+  facet_wrap(~ event) +
+  labs(
+    x = "Time",
+    y = "Value",
+    color = "Group ID",
+    title = "Mean Change of Questionnaire From Baseline to After 2 Weeks Treatment",
+    subtitle = "Each dimension has 3 levels: 1 = no problems, 2 = moderate problems, 3=extreme problems"
+  ) +
+  expand_limits(y = c(0,3)) +
+  theme_bw()
+```
+
 
 
 ```{r}
@@ -364,7 +388,8 @@ test %>%
 #| fig-subcap: "Mean difference of scores on a 5 step disability scale. Disability was measured at baseline and after the randomization phase (2 weeks later). Lowest score is 1 and is better than the higher score at 5 that is the worst. An increase, higher scores, means worsening. 1. minor 2. minor/moderate 3. moderate 4. moderate/severe 5. severe"
 
 test %>% 
-  filter(event == "Disability score")  %>% 
+  # filter(event == "Disability score")  %>%
+  filter(title == "Change in Disability From Baseline (Randomization) to 2 Weeks After Baseline") %>%
   ggplot(aes(x = time, y = value, group = group_title, color = group_title, fill = group_title)) +
   scale_color_brewer("Group", palette = "Set1") +
   scale_fill_brewer("Group", palette = "Set1") +
@@ -387,7 +412,7 @@ test %>%
 #| fig-subcap: "Mean difference of scores on a 5 step disability scale. Disability was measured at baseline and after the randomization phase (2 weeks later). Lowest score is 1 and is better than the higher score at 5 that is the worst. An increase, higher scores, means worsening. 1. minor 2. minor/moderate 3. moderate 4. moderate/severe 5. severe"
 
 test %>% 
-  filter(event == "Patients Who Used Any Type of Rescue Medication")  %>% 
+  filter(title == "Patients Who Used Any Type of Rescue Medication")  %>% 
   ggplot(aes(x = group_title, y = value, group = group_title, color = group_title, fill = group_title)) +
   scale_color_brewer("Group", palette = "Set1") +
   scale_fill_brewer("Group", palette = "Set1") +
@@ -408,11 +433,20 @@ test %>%
 # Saving first study results table as csv in order for Shiny app to work
 
 ```{r}
+str(test)
 dir.create("screencast-app")
 dir.create("screencast-app/data")
-write.csv(test,
-          "screencast-app/data/first_study_outcome_measures.csv", 
-          row.names = F)
+saveRDS(test, "screencast-app/data/first_study_outcome_measures.rds")
+
+```
+
+```{r}
+test %>% 
+  select(type, title) %>% 
+  group_by(
+    type, title
+  ) %>% 
+  distinct()
 ```
 
 
