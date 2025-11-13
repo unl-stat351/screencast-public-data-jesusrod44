@@ -38,7 +38,7 @@ if (file.exists("json_response.json")) {
 
 Protocol Section
 
-```{r}
+```{r, eval = F}
 json_response[['studies']][[1]][['protocolSection']]$identificationModule 
 json_response[['studies']][[1]][['protocolSection']]$statusModule
 json_response[['studies']][[1]][['protocolSection']]$sponsorCollaboratorsModule
@@ -55,7 +55,7 @@ json_response[['studies']][[1]][['protocolSection']]$ipdSharingStatementModule
 ```
 Results Section 
 
-```{r}
+```{r, eval = F}
 json_response[["studies"]][[1]][["resultsSection"]]$participantFlowModule
 json_response[["studies"]][[1]][["resultsSection"]]$baselineCharacteristicsModule
 json_response[["studies"]][[1]][["resultsSection"]]$outcomeMeasuresModule
@@ -76,20 +76,21 @@ study_information <- map_dfr(json_response[['studies']], function(study) {
     org_class = info$organization$class,
     brief_title = info$briefTitle,
     official_title = info$officialTitle
-  )
+  ) %>% 
+    unlist()
 }) 
 ```
 
 ```{r}
-str(study_information)
+# str(study_information)
 
 
 study_information <- 
   study_information %>% 
   map_dfr(~.x %>% 
-            unlist(recursive = T))
+            unlist())
 
-str(study_information)
+# str(study_information)
 ```
 
 # Results
@@ -104,26 +105,29 @@ outcome_list <- outcome_measures_list
 ```{r}
 outcome_df <- map_dfr(outcome_list, function(x) {
   tibble(
-    type = pluck(x, "type", .default = NA),
-    title = pluck(x, "title", .default = NA),
-    description = pluck(x, "description", .default = NA),
-    population_description = pluck(x, "populationDescription", .default = NA),
-    reporting_status = pluck(x, "reportingStatus", .default = NA),
-    param_type = pluck(x, "paramType", .default = NA),
-    dispersion_type = pluck(x, "dispersionType", .default = NA),
-    unit_of_measure = pluck(x, "unitOfMeasure", .default = NA),
-    time_frame = pluck(x, "timeFrame", .default = NA),
+    type = pluck(x, "type"),
+    title = pluck(x, "title"),
+    description = pluck(x, "description"),
+    population_description = pluck(x, "populationDescription"),
+    reporting_status = pluck(x, "reportingStatus"),
+    param_type = pluck(x, "paramType"),
+    dispersion_type = pluck(x, "dispersionType"),
+    unit_of_measure = pluck(x, "unitOfMeasure"),
+    time_frame = pluck(x, "timeFrame"),
     
     # Flatten nested parts
     group = if (!is.null(x$groups)) paste(unlist(x$groups), collapse = "; ") else NA,
     class = if (!is.null(x$classes)) paste(unlist(x$classes), collapse = "; ") else NA
-  )
+  ) %>% 
+    unlist()
 })
 ```
 
 ```{r}
-outcome_df_clean <- outcome_df %>%
-  mutate(across(everything(), ~ map_chr(., ~ if (is.null(.x)) NA else .x)))
+outcome_df_clean <- outcome_df 
+
+# %>%
+  # mutate(across(everything(), ~ map_chr(., ~ if (is.null(.x)) NA else .x)))
 ```
 
 ## trying to make a dataframe from the listed groups and classes
@@ -268,107 +272,249 @@ first_study_full_results[35:38,] %>%
   facet_wrap(~class_title)
   
 ```
-
-# FULL Results
-
-# Results 
-
-Safely extract all outcomes measures from all studies
+## Data Manipulation for better graphs
 
 ```{r}
-# Extract outcome measures list for each study
-all_outcome_measures <- map(
-  json_response$studies,
-  ~ pluck(.x, "resultsSection", "outcomeMeasuresModule", "outcomeMeasures", .default = NULL)
-)
-
-# Keep only non-null studies
-all_outcome_measures <- compact(all_outcome_measures)
-
-```
-
-Convert all outcome measure lists to dataframes and tag each study
-
-```{r}
-# Apply your original map_dfr logic to each study
-outcome_df_all <- imap_dfr(
-  all_outcome_measures,
-  function(outcome_list, study_index) {
-    map_dfr(outcome_list, function(x) {
-      tibble(
-        study_id = study_index,
-        type = pluck(x, "type", .default = NA),
-        title = pluck(x, "title", .default = NA),
-        description = pluck(x, "description", .default = NA),
-        population_description = pluck(x, "populationDescription", .default = NA),
-        reporting_status = pluck(x, "reportingStatus", .default = NA),
-        param_type = pluck(x, "paramType", .default = NA),
-        dispersion_type = pluck(x, "dispersionType", .default = NA),
-        unit_of_measure = pluck(x, "unitOfMeasure", .default = NA),
-        time_frame = pluck(x, "timeFrame", .default = NA),
-        group = if (!is.null(x$groups)) paste(unlist(x$groups), collapse = "; ") else NA,
-        class = if (!is.null(x$classes)) paste(unlist(x$classes), collapse = "; ") else NA
-      )
-    })
-  }
-)
-
-```
-
-Clean and flatten nulls
-
-```{r}
-outcome_df_clean <- outcome_df_all %>%
-  mutate(across(everything(), ~ ifelse(is.null(.x) | .x == "", NA, .x)))
-```
-
-Apply your groups and classes parsing logic to all studies at once
-
-```{r}
-study_groups <- outcome_df_clean %>% 
-  separate_longer_delim(cols = group, delim = ";") %>%
-  mutate(group = str_trim(group)) %>%
-  group_by(study_id) %>%
-  mutate(group_number = ceiling(row_number() / 3)) %>%
-  group_by(study_id, group_number) %>%
-  summarise(
-    group_id = first(group),
-    group_title = nth(group, 2),
-    group_description = nth(group, 3),
-    .groups = "drop"
-  ) %>%
-  distinct()
-
-```
-
-```{r}
-study_results <- outcome_df_clean %>%
-  select(-group) %>% 
-  separate_longer_delim(cols = class, delim = ";") %>%
-  mutate(class = str_trim(class)) %>%
-  group_by(study_id) %>%
-  unnest(everything()) %>% 
+test <- 
+first_study_full_results %>% 
   mutate(
-    class_title = if_else(str_detect(class, "[^A-Z0-9.]"), class, NA)
-  ) %>%
-  group_by(study_id, title) %>%
-  fill(class_title, .direction = "down") %>%
-  mutate(class_title = if_else(is.na(class_title), title, class_title)) %>%
-  filter(class != class_title) %>%
-  mutate(
-    group_number = if_else(
-      is.na(dispersion_type),
-      ceiling(row_number() / 2),
-      ceiling(row_number() / 3)
-    )
-  ) %>%
-  ungroup() %>%
-  group_by(study_id, type, title, group_number, class_title) %>%
-  summarise(
-    group_id = first(class),
-    value = nth(class, 2),
-    spread = ifelse(is.na(nth(class, 3)), NA, nth(class, 3)),
-    .groups = "drop"
+    event = str_remove(class_title, " at baseline| after 2 weeks"),
+    event = str_remove(event, "at 15 minutes| at 30 min.| at 2 weeks"),
+    time = 
+      case_when(
+        str_detect(class_title, "after 2 weeks") ~ "After 2 Weeks",
+        str_detect(class_title, "at 2 weeks") ~ "After 2 Weeks",
+        str_detect(class_title, "at 15 minutes") ~ "Pain Free At 15 minutes",
+        str_detect(class_title, "at 30 min.") ~ "Pain Free At 30 minutes",
+        TRUE ~ "Baseline"
+      ),
+    event = 
+      case_when(
+        str_detect(event, "Activity baseline") ~ "Activity",
+        str_detect(event, "Number of attacks treated and pain free") ~ "Number of attacks treated",
+        str_detect(event, "Number of treated attack pain free") ~ "Number of attacks treated",
+        str_detect(event, "Number of treated attacks") ~ "Number of attacks treated",
+        TRUE ~ event
+      ), 
+    time = factor(time, levels = c("Baseline", "After 2 Weeks", "Pain Free At 15 minutes", "Pain Free At 30 minutes"))
   )
+  
+```
+
+```{r}
+test %>% 
+  filter(event != "Number of attacks treated" & event != "VAS scale" & event != "Patients Who Used Any Type of Rescue Medication" & event != "Disability score") %>% 
+ggplot(
+       aes(x = time, y = value, fill = group_id)
+) + 
+  geom_bar(
+    stat = "identity", position = position_dodge(width = 1)
+  ) + 
+  geom_text(
+    aes(label = round(value, 2)),
+    position = position_dodge(width = 1),
+    vjust = -0.4,
+    size = 3.5
+  ) + 
+  facet_wrap(~event, scales = "free_x")
+```
+
+```{r}
+#| fig-subcap: ["EQ-5D-3L descriptive system comprises 5 dimensions: mobility, self-care, activity, pain and anxiety. Each dimension has 3 levels: 1 = no problems, 2 = moderate problems, 3=extreme problems. Subjects indicate health state by ticking choosing appropriate statement in each dimension. Patients completed the EQ-5D-3L at baseline (the start of the randomized period and at 2 weeks)."]
+#| 
+
+
+test %>% 
+  filter(event != "Number of attacks treated" & event != "VAS scale" & event != "Patients Who Used Any Type of Rescue Medication" & event != "Disability score")  %>% 
+  ggplot(aes(x = time, y = value, group = group_title, color = group_title)) +
+  scale_color_brewer("Group", palette = "Set1") +
+  geom_line(linewidth = 1, alpha = 0.7) +
+  geom_point(size = 3, alpha = 0.7) +
+  facet_wrap(~ event) +
+  labs(
+    x = "Time",
+    y = "Value",
+    color = "Group ID",
+    title = "Mean Change of Questionnaire From Baseline to After 2 Weeks Treatment",
+    subtitle = "Each dimension has 3 levels: 1 = no problems, 2 = moderate problems, 3=extreme problems"
+  ) +
+  expand_limits(y = c(0,3)) +
+  theme_bw()
 
 ```
+
+
+```{r}
+#| fig-subcap: "Headache pain was collected at the beginning of the attack (all treated attacks) and 15 minutes and 30 minutes post treatment pain free attacks.<br>Data was collected in the patient diary.<br>No mention in results whether attacks that were pain free at 15 minutes are included in attacks that were pain free at 30 minutes."
+
+test %>% 
+  filter(event == "Number of attacks treated") %>% 
+  ggplot(aes(x = time, y = value, group = group_title, color = group_title)) +
+  geom_line(linewidth = 1, alpha = 0.7) +
+  geom_point(size = 3, alpha = 0.7) +
+  labs(
+    x = "Time",
+    y = "Number of Attacks",
+    color = "Group",
+    title = "Comparison of Total Attacks and Pain-Free Attacks at 15 and 30 Minutes") +
+  expand_limits(y = 0) +
+  theme_bw()
+```
+```{r}
+#| fig-subcap: "Mean difference of scores on a 5 step disability scale. Disability was measured at baseline and after the randomization phase (2 weeks later). Lowest score is 1 and is better than the higher score at 5 that is the worst. An increase, higher scores, means worsening. 1. minor 2. minor/moderate 3. moderate 4. moderate/severe 5. severe"
+
+test %>% 
+  filter(event == "Disability score")  %>% 
+  ggplot(aes(x = time, y = value, group = group_title, color = group_title, fill = group_title)) +
+  scale_color_brewer("Group", palette = "Set1") +
+  scale_fill_brewer("Group", palette = "Set1") +
+  geom_bar(stat = "identity", position = position_dodge()) +
+  # geom_line(linewidth = 1, alpha = 0.7) +
+  # geom_point(size = 3, alpha = 0.7) +
+  # facet_wrap(~ event) +
+  labs(
+    x = "Time",
+    y = "Disability Score",
+    color = "Group ID",
+    title = "Mean Change of Scores on a 5 Step Disability Scale From Baseline to After 2 Weeks Treatment",
+    subtitle = "5 levels: 1=minor, 2=minor/moderate, 3=moderate, 4=moderate/severe, 5=severe"
+  ) +
+  expand_limits(y = c(0,5)) +
+  theme_bw()
+```
+
+```{r}
+#| fig-subcap: "Mean difference of scores on a 5 step disability scale. Disability was measured at baseline and after the randomization phase (2 weeks later). Lowest score is 1 and is better than the higher score at 5 that is the worst. An increase, higher scores, means worsening. 1. minor 2. minor/moderate 3. moderate 4. moderate/severe 5. severe"
+
+test %>% 
+  filter(event == "Patients Who Used Any Type of Rescue Medication")  %>% 
+  ggplot(aes(x = group_title, y = value, group = group_title, color = group_title, fill = group_title)) +
+  scale_color_brewer("Group", palette = "Set1") +
+  scale_fill_brewer("Group", palette = "Set1") +
+  geom_bar(stat = "identity") +
+  # geom_line(linewidth = 1, alpha = 0.7) +
+  # geom_point(size = 3, alpha = 0.7) +
+  # facet_wrap(~ event) +
+  labs(
+    x = "Time",
+    y = "Number of Patients",
+    color = "Group ID",
+    title = "Patients Who Used Any Type of Rescue Medication in Each Group"
+  ) +
+  expand_limits(y = c(0,50)) +
+  theme_bw()
+```
+
+# Saving first study results table as csv in order for Shiny app to work
+
+```{r}
+dir.create("screencast-app")
+dir.create("screencast-app/data")
+write.csv(first_study_full_results,
+          "screencast-app/data/first_study_outcome_measures.csv", 
+          row.names = F)
+```
+
+<!-- # FULL Results -->
+
+<!-- # Results  -->
+
+<!-- Safely extract all outcomes measures from all studies -->
+
+<!-- ```{r} -->
+<!-- # Extract outcome measures list for each study -->
+<!-- all_outcome_measures <- map( -->
+<!--   json_response$studies, -->
+<!--   ~ pluck(.x, "resultsSection", "outcomeMeasuresModule", "outcomeMeasures", .default = NULL) -->
+<!-- ) -->
+
+<!-- # Keep only non-null studies -->
+<!-- all_outcome_measures <- compact(all_outcome_measures) -->
+
+<!-- ``` -->
+
+<!-- Convert all outcome measure lists to dataframes and tag each study -->
+
+<!-- ```{r} -->
+<!-- # Apply your original map_dfr logic to each study -->
+<!-- outcome_df_all <- imap_dfr( -->
+<!--   all_outcome_measures, -->
+<!--   function(outcome_list, study_index) { -->
+<!--     map_dfr(outcome_list, function(x) { -->
+<!--       tibble( -->
+<!--         study_id = study_index, -->
+<!--         type = pluck(x, "type", .default = NA), -->
+<!--         title = pluck(x, "title", .default = NA), -->
+<!--         description = pluck(x, "description", .default = NA), -->
+<!--         population_description = pluck(x, "populationDescription", .default = NA), -->
+<!--         reporting_status = pluck(x, "reportingStatus", .default = NA), -->
+<!--         param_type = pluck(x, "paramType", .default = NA), -->
+<!--         dispersion_type = pluck(x, "dispersionType", .default = NA), -->
+<!--         unit_of_measure = pluck(x, "unitOfMeasure", .default = NA), -->
+<!--         time_frame = pluck(x, "timeFrame", .default = NA), -->
+<!--         group = if (!is.null(x$groups)) paste(unlist(x$groups), collapse = "; ") else NA, -->
+<!--         class = if (!is.null(x$classes)) paste(unlist(x$classes), collapse = "; ") else NA -->
+<!--       ) -->
+<!--     }) -->
+<!--   } -->
+<!-- ) -->
+
+<!-- ``` -->
+
+<!-- Clean and flatten nulls -->
+
+<!-- ```{r} -->
+<!-- outcome_df_clean <- outcome_df_all %>% -->
+<!--   mutate(across(everything(), ~ ifelse(is.null(.x) | .x == "", NA, .x))) -->
+<!-- ``` -->
+
+<!-- Apply your groups and classes parsing logic to all studies at once -->
+
+<!-- ```{r} -->
+<!-- study_groups <- outcome_df_clean %>%  -->
+<!--   separate_longer_delim(cols = group, delim = ";") %>% -->
+<!--   mutate(group = str_trim(group)) %>% -->
+<!--   group_by(study_id) %>% -->
+<!--   mutate(group_number = ceiling(row_number() / 3)) %>% -->
+<!--   group_by(study_id, group_number) %>% -->
+<!--   summarise( -->
+<!--     group_id = first(group), -->
+<!--     group_title = nth(group, 2), -->
+<!--     group_description = nth(group, 3), -->
+<!--     .groups = "drop" -->
+<!--   ) %>% -->
+<!--   distinct() -->
+
+<!-- ``` -->
+
+<!-- ```{r} -->
+<!-- study_results <- outcome_df_clean %>% -->
+<!--   select(-group) %>%  -->
+<!--   separate_longer_delim(cols = class, delim = ";") %>% -->
+<!--   mutate(class = str_trim(class)) %>% -->
+<!--   group_by(study_id) %>% -->
+<!--   unnest(everything()) %>%  -->
+<!--   mutate( -->
+<!--     class_title = if_else(str_detect(class, "[^A-Z0-9.]"), class, NA) -->
+<!--   ) %>% -->
+<!--   group_by(study_id, title) %>% -->
+<!--   fill(class_title, .direction = "down") %>% -->
+<!--   mutate(class_title = if_else(is.na(class_title), title, class_title)) %>% -->
+<!--   filter(class != class_title) %>% -->
+<!--   mutate( -->
+<!--     group_number = if_else( -->
+<!--       is.na(dispersion_type), -->
+<!--       ceiling(row_number() / 2), -->
+<!--       ceiling(row_number() / 3) -->
+<!--     ) -->
+<!--   ) %>% -->
+<!--   ungroup() %>% -->
+<!--   group_by(study_id, type, title, group_number, class_title) %>% -->
+<!--   summarise( -->
+<!--     group_id = first(class), -->
+<!--     value = nth(class, 2), -->
+<!--     spread = ifelse(is.na(nth(class, 3)), NA, nth(class, 3)), -->
+<!--     .groups = "drop" -->
+<!--   ) -->
+
+<!-- ``` -->
