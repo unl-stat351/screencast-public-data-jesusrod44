@@ -1,0 +1,352 @@
+---
+title: "Screencast Code"
+author: "Jesus Rodriguez"
+format: html
+---
+
+# Load Necessary Libraries 
+
+```{r setup}
+library(tidyverse) # basic data wrangling necessity
+
+library(rvest) # webscraping fundamentals
+library(httr2) # 
+library(xml2)  # 
+
+library(jsonlite) # json file parsing
+
+library(purrr) # functional programming, magic
+
+library(shiny)
+library(bslib)
+
+```
+
+# Acquiring the Data from the API
+
+```{r}
+if (file.exists("json_response.json")) {
+  
+  json_response <- read_json("json_response.json")
+  
+} else { 
+  uastring <- 
+    "R/python data science demos, youremail@email.com"
+  
+  request <- 
+    request(
+      "https://clinicaltrials.gov/api/v2/studies?query.cond=cluster+headache&aggFilters=results%3Awith%2Cstatus%3Acom"
+    ) %>% 
+    req_perform()
+  
+  json_response <- resp_body_json(request)
+  
+  # saving json_response if it didn't exist in the first place
+  jsonlite::write_json(json_response, "json_response.json")
+}
+```
+
+# Study Information Data Frame
+
+```{r}
+study_information <- 
+  map_dfr(json_response[["studies"]], function(study){
+    info <- study$protocolSection$identificationModule
+    
+    tibble(
+      nct_id = info$nctId,
+      org_study_id_info = info$orgStudyIdInfo$id,
+      organization_name = info$organization$fullName,
+      organization_class = info$organization$class,
+      brief_title = info$briefTitle,
+      official_title = info$officialTitle
+    ) %>% 
+      unlist()
+  })
+
+knitr::kable(head(study_information))
+```
+
+# Results Information Data Frame
+
+```{r}
+first_study_outcome_measures <- 
+  json_response[["studies"]][[1]][["resultsSection"]][["outcomeMeasuresModule"]][["outcomeMeasures"]]
+```
+
+
+```{r}
+first_study_results <-
+  map_dfr(first_study_outcome_measures, function(x) {
+    
+    tibble(
+      type = x$type,
+      title = x$title,
+      description = x$description,
+      population_description = x$populationDescription,
+      reporting_status = x$reportingStatus,
+      param_type = x$paramType,
+      unit_of_measure = x$unitOfMeasure,
+      time_frame = x$timeFrame,
+      dispersion_type = x$dispersionType,
+      
+      group = 
+        paste(unlist(x$groups), collapse = ";"),
+      class = 
+        paste(unlist(x$classes), collapse = ";")
+    ) %>% 
+      unlist()
+  }
+) 
+first_study_results
+```
+
+Cleaning the groups
+
+```{r}
+group_table <- 
+  first_study_results %>% 
+  separate_longer_delim(
+    cols = group,
+    delim = ";"
+  ) %>% 
+  mutate(
+    group = str_trim(group),
+    group_number = 
+      ceiling(row_number()/3)
+  ) %>% 
+  group_by(
+    group_number
+  ) %>% 
+  summarise(
+    group_id = first(group),
+    group_title = nth(group, 2),
+    group_description = nth(group, 3)
+  ) %>% 
+  select(
+    -group_number
+  ) %>% 
+  distinct()
+group_table
+
+```
+
+Cleaning the Classes
+
+```{r}
+class_table <- 
+  first_study_results %>% 
+  separate_longer_delim(
+    cols = class,
+    delim = ";"
+  ) %>% 
+  mutate(
+    class = str_trim(class),
+    class_title =
+      if_else(
+        str_detect(class, "[^A-Z0-9]"),
+        if_else(
+          str_detect(class, "0-9\\.0-9"),
+          NA,
+          class
+        ),
+        NA
+      ), 
+    class_title = 
+      if_else(
+        str_detect(
+          class_title, "[:digit:]+\\.[:digit:]?"  
+        ),
+        NA,
+        class_title
+      )
+  ) %>% 
+  group_by(title) %>% 
+  fill(class_title, .direction = "down") %>% 
+  mutate(
+    class_title = 
+      if_else(
+        is.na(class_title),
+        title,
+        class_title
+      )
+  ) %>% 
+  filter(
+    !class == class_title
+  ) %>% 
+  mutate(
+    group_number = 
+      if_else(
+        is.na(dispersion_type),
+        ceiling(row_number()/2),
+        ceiling(row_number()/3)
+      )
+  ) %>% 
+  group_by(type, title, group_number, description, population_description, reporting_status,param_type,unit_of_measure,time_frame,dispersion_type, class_title) %>% 
+  summarise(
+    group_id = first(class),
+    value = nth(class, 2),
+    spread = 
+      if_else(
+        is.na(nth(class,3)),
+        NA,
+        nth(class,3)
+      )
+  ) %>% 
+  ungroup() %>% 
+  select(-group_number)
+```
+
+# Making a big dataframe of results
+
+```{r}
+full_results <- 
+class_table %>% 
+  left_join(
+    group_table, 
+    by = "group_id"
+  )
+```
+
+# Format Columns
+
+```{r}
+full_results <- 
+  full_results %>% 
+  mutate(
+    across(c(value, spread), as.numeric),
+    across(c(type, param_type, dispersion_type, class_title, group_id), as.factor)
+  )
+```
+
+# Data Manipulaiton for Better Graphs
+
+```{r}
+full_results <- 
+  full_results %>% 
+  mutate(
+    time = 
+      case_when(
+        str_detect(class_title, "after 2 weeks") ~ "After 2 Weeks",
+        str_detect(class_title, "at 2 weeks") ~ "After 2 Weeks",
+        str_detect(class_title, "at 30 min.") ~ "Pain Free at 30 minutes",
+        str_detect(class_title, "at 15 minutes") ~ "Pain Free at 15 minutes",
+        T ~ "Baseline"
+      ),
+    time = factor(time, levels = c("Baseline", "After 2 Weeks", "Pain Free at 15 minutes", "Pain Free at 30 minutes")),
+    event = 
+      str_remove(class_title, "at baseline| after 2 weeks|at 15 minutes|at 30 min.|at 2 weeks"),
+    event = 
+      if_else(
+        str_detect(event, "Number of"),
+        "Number of Attacks Treated",
+        event
+      ),
+    event = 
+      case_when(
+        str_detect(event, "Activity baseline") ~ "Activity",
+        T ~ event
+      ),
+    event = str_trim(event)
+  ) 
+```
+
+```{r}
+head(full_results)
+```
+
+
+
+# Visualizations in R
+
+```{r}
+full_results %>% 
+  filter(event == "Number of Attacks Treated") %>% 
+  ggplot(aes(x = time, y = value, group = group_title, color = group_title)) + 
+  # geom_bar(stat = "identity", position = position_dodge()) + 
+  geom_line(linewidth = 1) + 
+  geom_point(size = 3) + 
+  theme_bw() + 
+  labs(
+    x = "Time",
+    y = "Number of Attacks",
+    title = "Comparison of Total Attacks and Pain-Free Attacks at 15 and 30 minutes",
+    color = "Cohort"
+  )
+```
+```{r}
+full_results %>% 
+  filter(title == 'Change in Disability From Baseline (Randomization) to 2 Weeks After Baseline') %>% 
+  ggplot(aes(x = time, y = value, group = group_title, fill = group_title)) + 
+  geom_bar(stat = "identity", position = position_dodge()) +
+  # geom_line(linewidth = 1) + 
+  # geom_point(size = 3) + 
+  theme_bw() + 
+  expand_limits(y = c(0,5)) +
+  labs(
+    x = "Time",
+    y = "Disability Score",
+    title = "Change in Disability Score from Baseline to 2 Weeks After Baseline",
+    subtitle = "Scores: 1 = minor, 2 = minor/moderate, 3 = moderate, 4 = moderate/severe, 5 = severe",
+    fill = "Cohort"
+  )
+```
+```{r}
+full_results %>% 
+  filter(event == "Mobility" | event == "Selfcare" | event == "Activity" | event == "Pain" | event == "Anxiety") %>% 
+  ggplot(aes(x = time, y = value, group = group_title, color = group_title)) + 
+  # geom_bar(stat = "identity", position = position_dodge()) + 
+  geom_line(linewidth = 1) + 
+  geom_point(size = 3) + 
+  facet_wrap(~event) + 
+  theme_bw() + 
+  expand_limits(y = c(0,3)) +
+  labs(
+    x = "Time",
+    y = "Value",
+    title = "Mean Change of Questionnaire EQ-5D-3L From Baseline to After 2 Weeks Treatment",
+subtitle = "Each dimension has 3 levels: 1 = no problems, 2 = moderate problems, 3=extreme problems",
+    color = "Cohort"
+  )
+```
+```{r}
+full_results %>% 
+  filter(event == "VAS scale") %>% 
+  ggplot(aes(x = time, y = value, group = group_title, color = group_title)) + 
+  # geom_bar(stat = "identity", position = position_dodge()) + 
+  geom_line(linewidth = 1) + 
+  geom_point(size = 3) + 
+  theme_bw() + 
+  expand_limits(y = c(0,100)) +
+  labs(
+    x = "Time",
+    y = "VAS scale",
+    title = "Mean VAS Scale Change From Baseline to After 2 Weeks",
+subtitle = "VAS scale (Overall health) from 0-100 mm where higher score is better (100) than lower score (0).",
+    color = "Cohort"
+  )
+```
+```{r}
+full_results %>% 
+  filter(title == 'Patients Who Used Any Type of Rescue Medication') %>% 
+  ggplot(aes(x = group_id, y = value, group = group_title, fill = group_title)) + 
+  geom_bar(stat = "identity", position = position_dodge()) +
+  theme_bw() + 
+  expand_limits(y = c(0,50)) +
+  labs(
+    x = "Group",
+    y = "Number of Patients",
+    title = "Total Patients Who Used Any Type of Rescue Medication",
+    fill = "Cohort"
+  )
+```
+
+# Saving first study results as a rds file for Shiny
+
+```{r}
+dir.create("screencast-app")
+dir.create("screencast-app/data")
+saveRDS(full_results, "screencast-app/data/full_results.rds")
+```
+
+

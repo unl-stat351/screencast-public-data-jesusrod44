@@ -1,25 +1,16 @@
 ---
-author: Your Name
+author: Jesus Rodriguez
 title: Project Dataset and Topics
 output: html
 ---
 
-[Link to dataset]()
+I'll be looking at some results from a study on cluster headaches from clinicaltrials.gov!
 
-Checking the robots.txt
-
-```{r}
-library(polite)
-bow('https://clinicaltrials.gov/api/v2')
-```
-
-It says it is not scrapable, however the API is free and does not require authentication. 
-
-Will this be a problem? 
+[Link to dataset](https://clinicaltrials.gov/data-api/api)
 
 Things you plan to investigate using this dataset:
 
-- Extract the cohorts and their sizes
+- Extract study information
 - Extract the results and measurements
 - Make some visualizations (charts, graphs, perhaps more...)
 
@@ -27,19 +18,19 @@ Stat 351 topics you plan to cover during the analysis:
 
 1. Topic 1
 
--   Parsing JSON 
+-   Scraping an API without authentication
 
 2. Topic 2
 
--   Scraping APIs
+-   Parsing JSON, turning it into tabular format
 
 3. Topic 3
 
--   Functional Programming
+-   Functional Programming, with purrr
 
 4. Topic 4
 
--   JSON list to Tabular data
+-   Creating good graphics
 
 5. Topic 5 
 

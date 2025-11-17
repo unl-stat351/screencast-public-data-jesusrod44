@@ -10,7 +10,6 @@ library(jsonlite)
 library(tidyverse)
 library(purrr)
 library(xml2)
-library(knitr)
 ```
 
 # Acquiring the Data
@@ -124,6 +123,28 @@ outcome_df <- map_dfr(outcome_list, function(x) {
 ```
 
 ```{r}
+testing <- 
+map_dfr(outcome_list, function(x) {
+  tibble(
+    type = pluck(x, "type"),
+    title = pluck(x, "title"),
+    description = pluck(x, "description"),
+    population_description = pluck(x, "populationDescription"),
+    reporting_status = pluck(x, "reportingStatus"),
+    param_type = pluck(x, "paramType"),
+    dispersion_type = pluck(x, "dispersionType"),
+    unit_of_measure = pluck(x, "unitOfMeasure"),
+    time_frame = pluck(x, "timeFrame"),
+    group_id = paste(c(x$groups[[1]]$id, x$groups[[2]]$id), collapse = ";"),
+    group_title = paste(c(x$groups[[1]]$title, x$groups[[2]]$title), collapse = ";"),
+    group_description = paste(c(x$groups[[1]]$description, x$groups[[2]]$description), collapse = ";"),
+  ) %>% 
+    unlist()
+})
+```
+
+
+```{r}
 outcome_df_clean <- outcome_df 
 
 # %>%
@@ -133,6 +154,13 @@ outcome_df_clean <- outcome_df
 ## trying to make a dataframe from the listed groups and classes
 
 ```{r}
+testing %>% 
+  separate_longer_delim(
+    cols = c(group_id, group_title, group_description),
+    delim = ";"
+  )
+
+
 first_study_groups <- 
 outcome_df_clean %>% 
   separate_longer_delim(

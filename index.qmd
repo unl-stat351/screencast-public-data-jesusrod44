@@ -1,5 +1,5 @@
 ---
-author: Your Name
+author: Jesus Rodriguez
 title: 'Project: Scraping Public Data Screencast'
 output: html
 ---
@@ -40,4 +40,6 @@ There will be three deliverables for this project:
     - Code uploaded to github repository
 
 In lieu of a midterm exam, you will peer review a selection of your classmates' screencasts. 
+
+Link to [screencast video](https://youtu.be/TDWX9ugJZIY)
 
